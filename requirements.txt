@@ -1,0 +1,11 @@
+numpy
+pandas
+scipy
+scikit-learn
+matplotlib
+torch
+h5py
+joblib
+statsmodels
+openpyxl
+jupyter
