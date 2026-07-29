@@ -10,16 +10,28 @@ build/
 .ipynb_checkpoints/
 *.ipynb_checkpoints
 
-# Data and outputs (large files)
+# Data and outputs (large files, PHI-adjacent)
 data/
 output/
 neuron_outputs/
+figshare/
+figures/
+results/
 *.npy
 *.npz
 *.mat
 *.csv
 *.xlsx
 *.eps
+*.pdf
+*.svg
+*.png
+*.pkl
+*.docx
+*.tex
+
+# macOS AppleDouble junk
+._*
 
 # Virtual environments
 .venv/
@@ -32,3 +44,4 @@ env/
 
 # Logs
 *.log
+logs/
