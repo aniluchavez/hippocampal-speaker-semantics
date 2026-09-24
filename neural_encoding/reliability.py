@@ -28,6 +28,99 @@ import numpy as np
 from joblib import Parallel, delayed
 from scipy.stats import pearsonr
 from sklearn.model_selection import KFold
+
+# ── GPU helpers (used when torch+CUDA is available) ───────────────────────────
+try:
+    import torch as _torch
+    _GPU_AVAILABLE = _torch.cuda.is_available()
+except ImportError:
+    _torch = None          # type: ignore[assignment]
+    _GPU_AVAILABLE = False
+
+_GPU_DEVICE = "cuda" if _GPU_AVAILABLE else "cpu"
+
+
+def _t(arr: np.ndarray, device: str = _GPU_DEVICE):
+    return _torch.tensor(np.asarray(arr, dtype="float32"), device=device)
+
+
+def _fit_all_neurons_gpu(
+    X_np: np.ndarray,
+    Y_np: np.ndarray,
+    alpha_per_neuron: np.ndarray,
+    *,
+    max_iter: int = 100,
+    tol: float = 1e-5,
+    device: str = _GPU_DEVICE,
+) -> np.ndarray:
+    """
+    Batched Poisson-ridge Newton-Raphson for ALL neurons simultaneously on GPU.
+    X_np            : (n, p)  float32
+    Y_np            : (n, k)  float32
+    alpha_per_neuron: (k,)    float32
+    Returns coef    : (k, p)  float32  (no intercept)
+    """
+    X_t = _t(X_np, device); Y_t = _t(Y_np, device)
+    n, p = X_t.shape; k = Y_t.shape[1]; dev = X_t.device
+    Xb = _torch.cat([_torch.ones(n, 1, device=dev), X_t], dim=1)
+    W  = _torch.zeros(p + 1, k, device=dev)
+    rm = _torch.ones(p + 1, device=dev); rm[0] = 0.0
+    at = _t(alpha_per_neuron, device)
+    for _ in range(max_iter):
+        eta = _torch.clamp(Xb @ W, -30.0, 30.0)
+        mu  = _torch.exp(eta)
+        G   = Xb.T @ (mu - Y_t) + (rm[:, None] * at[None, :]) * W
+        if G.abs().max().item() < tol:
+            break
+        XW  = Xb.unsqueeze(2) * _torch.sqrt(mu).unsqueeze(1)
+        H   = _torch.einsum("npi,nqi->ipq", XW, XW)
+        H  += at[:, None, None] * _torch.diag(rm)[None]
+        W  -= _torch.linalg.solve(H, G.T).T
+    return W[1:].T.cpu().numpy().astype(np.float32)   # (k, p)
+
+
+def _alpha_cv_gpu_batched(
+    X_np: np.ndarray,
+    Y_np: np.ndarray,
+    alphas: Sequence[float],
+    *,
+    n_splits: int = 5,
+    device: str = _GPU_DEVICE,
+) -> np.ndarray:
+    """
+    K-fold alpha selection for ALL neurons simultaneously on GPU.
+    Returns best_alpha : (k,) float32
+    """
+    n, k  = X_np.shape[0], Y_np.shape[1]
+    fold  = n // n_splits
+    best  = np.full(k, float(alphas[0]), dtype=np.float32)
+    best_ll = np.full(k, -np.inf)
+    for alpha in alphas:
+        at      = _torch.full((k,), float(alpha), dtype=_torch.float32, device=device)
+        fll     = np.zeros((n_splits, k))
+        for fi in range(n_splits):
+            vs = fi * fold
+            ve = (vs + fold) if fi < n_splits - 1 else n
+            va = np.arange(vs, ve)
+            tr = np.concatenate([np.arange(0, vs), np.arange(ve, n)])
+            X_tr = _t(X_np[tr], device); Y_tr = _t(Y_np[tr], device)
+            X_va = _t(X_np[va], device); Y_va = _t(Y_np[va], device)
+            coef = _torch.tensor(
+                _fit_all_neurons_gpu(X_np[tr], Y_np[tr],
+                                     np.full(k, float(alpha), np.float32),
+                                     max_iter=80, tol=1e-4, device=device),
+                device=device,
+            ).T                                              # (p, k)
+            # intercept: fit a separate intercept-only model for stability
+            mu_va = _torch.exp(_torch.clamp(X_va @ coef, -30, 30))
+            fll[fi] = (
+                Y_va * _torch.log(_torch.clamp(mu_va, 1e-10, None)) - mu_va
+            ).sum(0).cpu().numpy()
+        mean_ll = fll.mean(0)
+        better  = mean_ll > best_ll
+        best[better]    = alpha
+        best_ll[better] = mean_ll[better]
+    return best
 from sklearn.preprocessing import StandardScaler
 import matplotlib.pyplot as plt  # keep this at top level
 
@@ -374,6 +467,8 @@ def compute_noise_ceiling_for_neuron(
     ro = compute_split_half_beta_corr_samples(X_other, y_other, cfg, fit_beta=fit_beta, alpha=alpha_other, rng=rng)
 
     ceil_samples = np.full(cfg.n_half_splits, np.nan)
+    rs_sb_samples = np.full(cfg.n_half_splits, np.nan)
+    ro_sb_samples = np.full(cfg.n_half_splits, np.nan)
     for i in range(cfg.n_half_splits):
         r_s = rs[i]
         r_o = ro[i]
@@ -386,12 +481,22 @@ def compute_noise_ceiling_for_neuron(
 
         rs_sb = _spearman_brown(r_s)
         ro_sb = _spearman_brown(r_o)
+        rs_sb_samples[i] = rs_sb
+        ro_sb_samples[i] = ro_sb
 
         if np.isfinite(rs_sb) and np.isfinite(ro_sb) and rs_sb >= 0 and ro_sb >= 0:
             ceil_samples[i] = float(np.sqrt(rs_sb * ro_sb))
 
     valid = ceil_samples[np.isfinite(ceil_samples)]
+    valid_self = rs_sb_samples[np.isfinite(rs_sb_samples)]
+    valid_other = ro_sb_samples[np.isfinite(ro_sb_samples)]
     return {
+        "self_reliability_samples": rs_sb_samples,
+        "other_reliability_samples": ro_sb_samples,
+        "self_reliability_mean": float(np.mean(valid_self)) if valid_self.size else np.nan,
+        "self_reliability_median": float(np.median(valid_self)) if valid_self.size else np.nan,
+        "other_reliability_mean": float(np.mean(valid_other)) if valid_other.size else np.nan,
+        "other_reliability_median": float(np.median(valid_other)) if valid_other.size else np.nan,
         "ceil_samples": ceil_samples,
         "ceil_mean": float(np.mean(valid)) if valid.size else np.nan,
         "ceil_median": float(np.median(valid)) if valid.size else np.nan,
@@ -424,19 +529,46 @@ def run_beta_reliability_all_neurons(
     # Precompute alphas per neuron per condition (recommended)
     cached_alphas: Dict[int, Tuple[float, float]] = {}
     if cfg.reuse_alpha:
-        for i in neuron_indices:
-            ys = Y_self[:, i]
-            yo = Y_other[:, i]
-            if not (np.all(np.isfinite(ys)) and np.all(np.isfinite(yo))) or np.std(ys) == 0 or np.std(yo) == 0:
-                cached_alphas[i] = (np.nan, np.nan)
-                continue
-            a_s = select_alpha_cv(X_self, ys, cfg.alphas, split=cfg.alpha_cv_split,
-                                  n_splits=cfg.alpha_cv_folds, random_state=cfg.random_state + 101 + i,
-                                  standardize=cfg.standardize_X)
-            a_o = select_alpha_cv(X_other, yo, cfg.alphas, split=cfg.alpha_cv_split,
-                                  n_splits=cfg.alpha_cv_folds, random_state=cfg.random_state + 303 + i,
-                                  standardize=cfg.standardize_X)
-            cached_alphas[i] = (a_s, a_o)
+        active = [i for i in neuron_indices
+                  if np.all(np.isfinite(Y_self[:, i])) and np.all(np.isfinite(Y_other[:, i]))
+                  and np.std(Y_self[:, i]) > 0 and np.std(Y_other[:, i]) > 0]
+        for i in set(neuron_indices) - set(active):
+            cached_alphas[i] = (np.nan, np.nan)
+
+        if active:
+            if _GPU_AVAILABLE:
+                # Batch all active neurons simultaneously on GPU
+                Ys_mat = Y_self[:, active].astype(np.float32)
+                Yo_mat = Y_other[:, active].astype(np.float32)
+                Xs = (X_self - X_self.mean(0)) / np.where(X_self.std(0) == 0, 1, X_self.std(0))
+                Xo = (X_other - X_other.mean(0)) / np.where(X_other.std(0) == 0, 1, X_other.std(0))
+                alphas_s = _alpha_cv_gpu_batched(
+                    Xs.astype(np.float32), Ys_mat, cfg.alphas,
+                    n_splits=cfg.alpha_cv_folds,
+                )
+                alphas_o = _alpha_cv_gpu_batched(
+                    Xo.astype(np.float32), Yo_mat, cfg.alphas,
+                    n_splits=cfg.alpha_cv_folds,
+                )
+                for j, i in enumerate(active):
+                    cached_alphas[i] = (float(alphas_s[j]), float(alphas_o[j]))
+            else:
+                # CPU fallback: parallelise across neurons
+                def _cv_one(i):
+                    return i, (
+                        select_alpha_cv(X_self, Y_self[:, i], cfg.alphas,
+                                        split=cfg.alpha_cv_split, n_splits=cfg.alpha_cv_folds,
+                                        random_state=cfg.random_state + 101 + i,
+                                        standardize=cfg.standardize_X),
+                        select_alpha_cv(X_other, Y_other[:, i], cfg.alphas,
+                                        split=cfg.alpha_cv_split, n_splits=cfg.alpha_cv_folds,
+                                        random_state=cfg.random_state + 303 + i,
+                                        standardize=cfg.standardize_X),
+                    )
+                for i, pair in Parallel(n_jobs=cfg.n_jobs, prefer="threads")(
+                    delayed(_cv_one)(i) for i in active
+                ):
+                    cached_alphas[i] = pair
 
     def _worker(i: int) -> Dict[str, Any]:
         ys = Y_self[:, i]
@@ -446,6 +578,9 @@ def run_beta_reliability_all_neurons(
         if (not np.all(np.isfinite(ys))) or (not np.all(np.isfinite(yo))) or np.std(ys) == 0 or np.std(yo) == 0:
             out.update({"r_cross": np.nan, "null_distribution": np.array([]),
                         "alpha_self": np.nan, "alpha_other": np.nan,
+                        "self_reliability_mean": np.nan, "self_reliability_median": np.nan,
+                        "other_reliability_mean": np.nan, "other_reliability_median": np.nan,
+                        "self_reliability_samples": np.array([]), "other_reliability_samples": np.array([]),
                         "ceil_mean": np.nan, "ceil_median": np.nan, "ceil_ci_low": np.nan, "ceil_ci_high": np.nan})  # pyright: ignore[reportCallIssue]
             return out
 
@@ -455,6 +590,9 @@ def run_beta_reliability_all_neurons(
             if not (np.isfinite(a_s) and np.isfinite(a_o)):
                 out.update({"r_cross": np.nan, "null_distribution": np.array([]),
                             "alpha_self": np.nan, "alpha_other": np.nan,
+                            "self_reliability_mean": np.nan, "self_reliability_median": np.nan,
+                            "other_reliability_mean": np.nan, "other_reliability_median": np.nan,
+                            "self_reliability_samples": np.array([]), "other_reliability_samples": np.array([]),
                             "ceil_mean": np.nan, "ceil_median": np.nan, "ceil_ci_low": np.nan, "ceil_ci_high": np.nan})
                 return out
 
@@ -480,7 +618,7 @@ def run_beta_reliability_all_neurons(
         return out
 
     results = cast(List[Dict[str, Any]],
-                Parallel(n_jobs=cfg.n_jobs)(
+                Parallel(n_jobs=cfg.n_jobs, prefer="threads")(
                     delayed(_worker)(i) for i in neuron_indices
                 ))
 
