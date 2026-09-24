@@ -11,8 +11,10 @@ def load_mat_data(file_path):
         ir = spike_group['ir'][:]
         jc = spike_group['jc'][:]
         spikes = scipy.sparse.csr_matrix((data, ir, jc)).toarray()
-        qual = mat_file['qual'][:].flatten()
-        chan = mat_file['chan'][:].flatten()
+        qual_key = 'qual' if 'qual' in mat_file else 'quality'
+        chan_key = 'chan' if 'chan' in mat_file else 'channelIds'
+        qual = mat_file[qual_key][:].flatten()
+        chan = mat_file[chan_key][:].flatten()
     print(f"Loaded spikes shape: {spikes.shape}")
     print(f"Qual shape: {qual.shape}, Chan shape: {chan.shape}")
     return spikes, qual, chan
@@ -355,4 +357,3 @@ def add_regress_dur_column(df, speaker_window_modes, default_mode="onset_to_offs
 
     df["regress_dur"] = durations
     return df
-

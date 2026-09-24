@@ -41,9 +41,9 @@ def load_mat_data(file_path: str) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
 
         spikes = scipy.sparse.csr_matrix((data, ir, jc)).toarray()
 
-        qual_ds = f.get("qual")
-        chan_ds = f.get("chan")
-        assert qual_ds is not None and chan_ds is not None, "Missing 'qual' or 'chan' in .mat file"
+        qual_ds = f.get("qual") or f.get("quality")
+        chan_ds = f.get("chan") or f.get("channelIds")
+        assert qual_ds is not None and chan_ds is not None, "Missing 'qual'/'quality' or 'chan'/'channelIds' in .mat file"
 
         qual = np.asarray(cast(h5py.Dataset, qual_ds)[()]).ravel()
         chan = np.asarray(cast(h5py.Dataset, chan_ds)[()]).ravel()
@@ -78,7 +78,10 @@ def extract_speaker_events(file_path, speaker_of_interest=None, interest_pre_win
                            other_start_ref="onset", other_start_shift=0, other_end_ref="offset", other_end_shift=0,
                            target_ref_point="onset", target_shift=250, target_window_length=500,
                            other_ref_point="offset", other_shift=-500, other_window_length=300):
-    df = pd.read_excel(file_path, sheet_name="Sheet1", keep_default_na=False)
+    try:
+        df = pd.read_excel(file_path, sheet_name="Sheet1", keep_default_na=False)
+    except ValueError:
+        df = pd.read_excel(file_path, sheet_name=0, keep_default_na=False)
     speaker_columns = [col for col in df.columns if col.lower().startswith("speaker")]
     speaker_events = {}
 

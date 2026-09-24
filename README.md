@@ -38,6 +38,12 @@ from neural_encoding import spike_processing as spu
 | `utils/inputwrappers.py` | Input data wrappers |
 | `utils/poisson_xy_utils.py` | XY utility functions |
 
+## Analysis provenance
+
+See [ANALYSIS_PROVENANCE.md](ANALYSIS_PROVENANCE.md) for a figure/table →
+script mapping covering the manuscript's main and supplementary figures and
+tables.
+
 ## Legacy
 
 Older versions of the core modules are preserved in `legacy/` for reference.
