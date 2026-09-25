@@ -81,6 +81,7 @@ than guessed at.
 | Table S6 | `scripts/run_table_s6_cv_null_sweep.sbatch` (+ `semantic_glm.py`) → `scripts/compute_table_s6_stats.py` | BERT L12, bestfixed window, PC50, 3 CV/null combinations (Block+circular, Block+shuffled, Shuffle+shuffled) — run with permutation testing actually enabled (no `--r2_only`); the previously cached bestfixed pkl had `p_perm` hardcoded to 1.0 and could not be used to verify this table. Both block-CV combinations show reliably negative mean Test R² (two-sided Wilcoxon vs. 0, patient-level) despite 12–19% of neurons individually clearing the permutation-null threshold. |
 | Table S7 | Per-patient one-way ANOVA (cosine distance by semantic category) — same analysis as Fig 3D | |
 | Table S8 | `notebooks/RSA.ipynb`, `notebooks/rsa_multipatient.ipynb` | Per-patient Spearman RSA (speaking vs. listening word-word RDMs) — same analysis as Fig 5D; see note there. |
+| Table S9 | **[undocumented]** (Source Data `Fig4E_fstats` only) | Per-patient one-way ANOVA (cosine distance by other-speaker identity) underlying Fig 4E, 12/15 patients. Only F and p were available; the per-neuron distance-by-speaker data needed for df/η²/CI (as in Table S7) was not located during this audit. |
 
 ## Known pipeline gotchas (see git history / commit messages for fixes)
 
