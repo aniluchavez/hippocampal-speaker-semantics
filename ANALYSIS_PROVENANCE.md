@@ -49,8 +49,8 @@ than guessed at.
 | Fig 1J semantic summary | `scripts/generate_reliability_tex_tables.py` (patient-level mean/SD/SEM aggregation) | |
 | Fig 1K, 1L | `scripts/plot_fig1l_bestfixed_dots_overlay.py`, `scripts/overlay_fig1l_patient_dots.py` | "bestfixed" window (self −300/+200 ms, other +20/+520 ms), BERT L12, PC50. |
 | Fig 2J, 2K | `semantic_glm.py --reliability` (bestfixed window, BERT L12) | Per-neuron self/other reliability and r_cross. |
-| Fig 3B | **[undocumented]** | Category count filtering (raw vs. retained). |
-| Fig 3C | Newclustering pipeline (script not identified by name in this audit; regenerated data matches `Fig3C_NEWCLUSTERING_MATCHED_unclipped.pdf`) | |
+| Fig 3B | `neural_encoding/cluster_analysis.py` (`report_cluster_balance`, `minimal_balancing`, `run_clusterwise_cosine_distance`) | Raw (`n_self_raw`/`n_other_raw`) vs. balanced/retained category counts, produced as a side effect of the clusterwise balancing step below. |
+| Fig 3C | `neural_encoding/cluster_analysis.py` (`run_clusterwise_cosine_distance`) via `scripts/cluster_glm_legacy_replication.py` | Semantic-category cosine-distance analysis ("Newclustering" pipeline); `cluster_glm_legacy_replication.py` documents the exact balancing recipe (`balance_function_words=True, cap_large_clusters=False, min_trials_per_condition=10, max_size_ratio=2, cap_reference="median", balance_all_clusters=True, soft_balance=True`, `n_components=10`) used to regenerate `Fig3C_NEWCLUSTERING_MATCHED_unclipped.pdf`. |
 | Fig 3D | Per-patient one-way ANOVA on cosine distance by semantic category — same underlying analysis as Table S7 | |
 | Fig 3E | Pooled neuron-category cosine distances across 15 patients (same pipeline as Fig 3C, pooled) | |
 | Fig 4B, 4C | Same reliability pipeline as Fig 2J/K, filtered to the Fig 4 patient subset | |
@@ -58,7 +58,7 @@ than guessed at.
 | Fig 4E | Per-patient ANOVA F/p, no-tag / excl-YEZ / speaker-tag variants | |
 | Fig 4F | Pooled neuron-category cosine distances, 12-patient subset | |
 | Fig 4I | `scripts/three_way_r_cross.py` | Self/other1/other2 pairwise r_cross, BERT L12, PC30, `fixed_selfm200_otherp100_len500` window. |
-| Fig 5B, 5C | Per-token word2vec RSA scripts (word-level extraction; script not renamed/identified precisely in this audit) | |
+| Fig 5B, 5C | `notebooks/RSA.ipynb` | Per-token word2vec/RDM extraction and self-vs-other MDS scatter plots (patients YEU and YFF, respectively; Procrustes-aligned via `orthogonal_procrustes`). |
 | Fig 5D | `notebooks/RSA.ipynb`, `notebooks/rsa_multipatient.ipynb` | Word-word cosine-distance RDMs and Spearman ρ between speaking/listening geometries; same analysis as Table S8. (A separate MATLAB implementation also exists in a collaborator-supplied, non-version-controlled folder, `semantic_syntactic_emb_project_for_Chavez/1_ANALYSES_RSA/`, not included here.) |
 | Fig 5F | `scripts/ccgp_decode/` (`run.py` → `ccgp.py`/`io.py`/`labels.py`/`balance.py`), 11-class decoding | Output consumed from `results500_10/` (`PTY*_hippocampus_timecourse_plotdata.npz`). This package was copied in from the separate `Hippocampal_Geometry_Convos` repo, where it also produced `resultssuper4/` — confirmed by matching filenames. |
 | Fig 5G | `scripts/ccgp_decode/` (same package, `recode_to_super4` grouping in `labels.py`), 4-class (grouped) decoding | Output consumed from `resultssuper4/`. |
