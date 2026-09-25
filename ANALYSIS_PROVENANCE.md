@@ -59,7 +59,7 @@ than guessed at.
 | Fig 4F | Pooled neuron-category cosine distances, 12-patient subset | |
 | Fig 4I | `scripts/three_way_r_cross.py` | Self/other1/other2 pairwise r_cross, BERT L12, PC30, `fixed_selfm200_otherp100_len500` window. |
 | Fig 5B, 5C | Per-token word2vec RSA scripts (word-level extraction; script not renamed/identified precisely in this audit) | |
-| Fig 5D | **[external, pending]** RSA (speaking vs. listening word-word RDMs, Spearman ρ) — same analysis as Table S8. MATLAB batch scripts live in a collaborator-supplied, non-version-controlled folder (`semantic_syntactic_emb_project_for_Chavez/1_ANALYSES_RSA/`); to be added to this repo once supplied. | |
+| Fig 5D | `notebooks/RSA.ipynb`, `notebooks/rsa_multipatient.ipynb` | Word-word cosine-distance RDMs and Spearman ρ between speaking/listening geometries; same analysis as Table S8. (A separate MATLAB implementation also exists in a collaborator-supplied, non-version-controlled folder, `semantic_syntactic_emb_project_for_Chavez/1_ANALYSES_RSA/`, not included here.) |
 | Fig 5F | `scripts/ccgp_decode/` (`run.py` → `ccgp.py`/`io.py`/`labels.py`/`balance.py`), 11-class decoding | Output consumed from `results500_10/` (`PTY*_hippocampus_timecourse_plotdata.npz`). This package was copied in from the separate `Hippocampal_Geometry_Convos` repo, where it also produced `resultssuper4/` — confirmed by matching filenames. |
 | Fig 5G | `scripts/ccgp_decode/` (same package, `recode_to_super4` grouping in `labels.py`), 4-class (grouped) decoding | Output consumed from `resultssuper4/`. |
 
@@ -80,7 +80,7 @@ than guessed at.
 | Table S5 | `scripts/run_selfother_reliability_bestfixed_multipc_parallel.sbatch` (+ `semantic_glm.py --reliability`) | BERT L12, bestfixed window, PC sweep {5,10,20,50,100,200,300,500}; r_cross vs. permutation null, Wilcoxon W / rank-biserial r / p. |
 | Table S6 | `scripts/run_table_s6_cv_null_sweep.sbatch` (+ `semantic_glm.py`) | BERT L12, bestfixed window, PC50, 3 CV/null combinations (Block+circular, Block+shuffled, Shuffle+shuffled) — run with permutation testing actually enabled (no `--r2_only`); the previously cached bestfixed pkl had `p_perm` hardcoded to 1.0 and could not be used to verify this table. |
 | Table S7 | Per-patient one-way ANOVA (cosine distance by semantic category) — same analysis as Fig 3D | |
-| Table S8 | **[external, pending]** Per-patient Spearman RSA (speaking vs. listening word-word RDMs) — same analysis as Fig 5D; see note there. | |
+| Table S8 | `notebooks/RSA.ipynb`, `notebooks/rsa_multipatient.ipynb` | Per-patient Spearman RSA (speaking vs. listening word-word RDMs) — same analysis as Fig 5D; see note there. |
 
 ## Known pipeline gotchas (see git history / commit messages for fixes)
 
